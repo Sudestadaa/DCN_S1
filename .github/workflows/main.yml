@@ -7,10 +7,9 @@ on:
   pull_request:
     branches:
       - main
-
 jobs: 
   build:
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     steps:
 
       # Paso 1: Checkout del repositorio
@@ -34,21 +33,21 @@ jobs:
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
           
-      # Paso 5: Configurar credenciales de AWS, incluyendo AWS_SESSION_TOKEN
+     # Paso 5: Configurar credenciales de AWS para SSH, incluyendo AWS_SESSION_TOKEN
       - name: Set up AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # Cambia a tu región si es necesario
+          aws-region: us-east-1  # Cambia a tu región
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-
-      # Paso 5.5: Agregar llave SSH para la conexión a la EC2
+    # Paso 5.5: 
       - name: Add SSH Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
 
       # Paso 6: Conectarse a EC2 y desplegar el contenedor
       - name: SSH commands to deploy
