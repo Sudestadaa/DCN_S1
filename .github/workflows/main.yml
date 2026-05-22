@@ -54,6 +54,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          # Add this line to ensure proper key format
+          ssh-keygen -p -N "" -f ~/.ssh/id_rsa -m pem >/dev/null 2>&1 || true
 
 
       # Paso 6: Conectarse a EC2 y desplegar el contenedor
