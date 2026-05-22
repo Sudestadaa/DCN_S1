@@ -43,24 +43,26 @@ jobs:
           aws-region: us-east-1  # Cambia a tu region
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           
-    # Paso 5.5: 
-      - name: Add SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+    # Paso 5.5: Configurar el SSH Agent de forma segura
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-
-      # Paso 6: Conectarse a EC2 y desplegar el contenedor
+      # Paso 6: Conectarse a EC2 y desplegar
       - name: SSH commands to deploy
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
             # Autenticar en DockerHub desde EC2
-            echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+            
             # Descargar la última versión de la imagen
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-            # Parar y eliminar cualquier contenedor previo
-            docker stop my-app || true && docker rm my-app || true
-            # Iniciar el contenedor
+            
+            # Parar y eliminar cualquier contenedor previo si existe
+            docker stop my-app || true
+            docker rm my-app || true
+            
+            # Iniciar el nuevo contenedor
             docker run -d --name my-app -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
           EOF
