@@ -22,13 +22,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # Paso 3: Ver qué archivos existen realmente (DEBUG)
-      - name: List repository files
-        run: |
-          echo "=== ¿Dónde estoy parado? ==="
-          pwd
-          echo "=== Archivos en esta carpeta ==="
-          ls -la
+      
 
       # Paso 3: Construir la imagen de Docker
       - name: Build Docker Image
@@ -48,28 +42,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1  # Cambia a tu region
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          
     # Paso 5.5: 
       - name: Add SSH Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Add this line to ensure proper key format
-          # Validar el formato de la clave
-          if ! ssh-keygen -l -f ~/.ssh/id_rsa > /dev/null 2>&1; then
-            echo "El formato de la clave SSH es inválido"
-            exit 1
-          fi
 
 
       # Paso 6: Conectarse a EC2 y desplegar el contenedor
       - name: SSH commands to deploy
         run: |
-         ssh -v -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-           -o ConnectTimeout=10 -o BatchMode=yes \
-           ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
-         echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-         docker stop my-app || true && docker rm my-app || true
-         docker run -d --name my-app -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-         EOF
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            # Autenticar en DockerHub desde EC2
+            echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+            # Descargar la última versión de la imagen
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
+            # Parar y eliminar cualquier contenedor previo
+            docker stop my-app || true && docker rm my-app || true
+            # Iniciar el contenedor
+            docker run -d --name my-app -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
+          EOF
