@@ -1,13 +1,17 @@
+FROM eclipse-temurin:22-jdk AS buildstage 
 
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+RUN apt-get update && apt-get install -y maven
+
 WORKDIR /app
+
 COPY pom.xml .
-COPY src ./src
-RUN mvn clean package -DskipTests
+COPY src /app/src
+RUN mvn clean package
 
+FROM eclipse-temurin:22-jdk
 
-FROM eclipse-temurin:17-jre-jammy
-WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=buildstage /app/target/microservicio-1.0.0.jar /app/app.jar
+
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+CMD ["java", "-jar", "/app/app.jar"]
