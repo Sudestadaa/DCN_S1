@@ -1,5 +1,5 @@
-name: Build and Push Docker Image
- 
+name: Build and Deploy to Amazon EC2
+
 on:
   push:
     branches:
@@ -7,58 +7,54 @@ on:
   pull_request:
     branches:
       - main
-jobs: 
-  build:
-    runs-on: ubuntu-latest 
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
     steps:
-
-      # Paso 1: Checkout del repositorio
+      # Paso 1: Descargar el código del repositorio en el servidor de GitHub
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Paso 2: Autenticar en DockerHub
+      # Paso 2: Autenticarse en DockerHub usando los secrets del repositorio
       - name: Log in to DockerHub
-        uses: docker/login-action@v2 
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
 
-      # Paso 3: Construir la imagen de Docker
+      # Paso 3: Construir la imagen apuntando al Dockerfile dentro de la subcarpeta
       - name: Build Docker Image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest -f PlataformaEducativa/Dockerfile PlataformaEducativa/
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest \
+            -f PlataformaEducativa/Dockerfile \
+            PlataformaEducativa/
 
-      # Paso 4: Hacer push de la imagen a DockerHub
+      # Paso 4: Subir la imagen construida a DockerHub
       - name: Push Docker Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-          
-     # Paso 5: Configurar credenciales de AWS para SSH, incluyendo AWS_SESSION_TOKEN
-      - name: Set up AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # Cambia a tu region
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          
-    # Paso 5.5: Configurar el SSH Agent Nativo 
-      - name: Setup SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-      # Paso 6: Conectarse a EC2 y desplegar
-      - name: SSH commands to deploy
-        run: |
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Autenticar en DockerHub desde EC2
-            echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-            # Descargar la última versión de la imagen
+      # Paso 5: Conectarse por SSH a la EC2 y realizar el despliegue automático
+      - name: Deploy to EC2 Instance
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.USER_SERVER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            # 1. Autenticar la instancia de EC2 con DockerHub
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            
+            # 2. Bajar la última versión de la imagen que acabamos de subir
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-            # Parar y eliminar cualquier contenedor previo
-            docker stop my-app || true && docker rm my-app || true
-            # Iniciar el contenedor
+            
+            # 3. Detener y remover contenedores viejos si existen para evitar conflictos de puertos
+            docker stop my-app || true
+            docker rm my-app || true
+            
+            # 4. Iniciar el contenedor exponiendo el puerto 8080 de tu app Spring Boot
             docker run -d --name my-app -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-          EOF
